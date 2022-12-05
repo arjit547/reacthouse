@@ -1,16 +1,27 @@
 pipeline {
     agent any
     stages {
-        stage('git repo') {
+        stage('git repo ') {
             steps {
-               
+              
                 sh "git clone https://github.com/arjit547/reacthouse.git"
                 cd reacthouse
-                npm install
-                npm run build
-                npm start
             }
         }
-        
+        stage('install') {
+            steps {
+                sh "npm install"
+            }
+        }
+        stage('Build') {
+            steps {
+                sh "npm run build"
+            }
+        }
+        stage('Start') {
+            steps {
+                sh "npm start"
+            }
+        }
     }
 }
