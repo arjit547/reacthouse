@@ -5,23 +5,12 @@ pipeline {
             steps {
                
                 sh "git clone https://github.com/arjit547/reacthouse.git"
-                
+                cd reacthouse
+                npm install
+                npm run build
+                npm start
             }
         }
-        stage('install') {
-            steps {
-                sh "npm install"
-            }
-        }
-        stage('build') {
-            steps {
-                sh "npm run build"
-            }
-        }
-        stage('start') {
-            steps {
-                sh "npm start"
-            }
-        }
+        
     }
 }
