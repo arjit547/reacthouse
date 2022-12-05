@@ -4,7 +4,7 @@ pipeline {
         stage('git repo') {
             steps {
                
-                sh "git clone https://github.com/kishancs2020/TicketBookingServiceJunitTesting.git"
+                sh "git clone https://github.com/arjit547/reacthouse.git"
                 
             }
         }
