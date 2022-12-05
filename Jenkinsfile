@@ -5,7 +5,7 @@ pipeline {
             steps {
               
                 sh "git clone https://github.com/arjit547/reacthouse.git"
-                cd reacthouse
+                
             }
         }
         stage('install') {
