@@ -1,0 +1,69 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 16
+    commands:
+      - echo "=========================================="
+      - echo "📦 Installing dependencies and tools..."
+      - npm install
+
+      - echo "Installing Grype vulnerability scanner..."
+      - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+      - grype version
+
+      - echo "Installing Python..."
+      - apt-get update -y && apt-get install -y python3
+
+  pre_build:
+    commands:
+      - echo "=========================================="
+      - echo "🔍 Running Grype vulnerability scan..."
+      - echo "=========================================="
+
+      # Run Grype scan (fail on medium or higher severity)
+      - |
+        echo "Running vulnerability scan..."
+        grype dir:. --fail-on medium --output json > grype-report.json
+        SCAN_EXIT_CODE=${PIPESTATUS[0]}
+
+        echo "Generating HTML report from JSON..."
+        python3 grype_to_html.py || echo "⚠️ Failed to convert JSON to HTML"
+
+        echo "Uploading HTML report to S3..."
+        if [ -f "grype-report.html" ]; then
+          aws s3 cp grype-report.html s3://arjit-grype-report-s3/
+        else
+          echo "⚠️ No HTML report found to upload."
+        fi
+
+        # Stop pipeline if vulnerabilities found
+        if [ $SCAN_EXIT_CODE -ne 0 ]; then
+          echo "❌ Vulnerabilities found! Failing the build..."
+          exit 1
+        else
+          echo "✅ No medium or higher vulnerabilities found. Continuing build..."
+        fi
+
+  build:
+    commands:
+      - echo "=========================================="
+      - echo "🏗️ Building the frontend..."
+      - npm run build
+      - echo "✅ Build completed successfully."
+
+  post_build:
+    commands:
+      - echo "=========================================="
+      - echo "📤 Deploying build to S3 and invalidating CloudFront..."
+      - aws s3 sync build/ s3://arjit-s3-app
+      - aws cloudfront create-invalidation --distribution-id E3PIQ3TRAQXUY0 --paths "/*"
+      - echo "✅ Deployment completed successfully."
+
+artifacts:
+  files:
+    - '**/*'
+    - grype-report.html
+  base-directory: build
+  discard-paths: yes
