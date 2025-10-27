@@ -2,7 +2,9 @@ version: 0.2
 
 env:
   variables:
-    REPORT_BUCKET: "arjit-grype-report-s3"   # S3 bucket for HTML report
+    REPORT_BUCKET: "arjit-grype-report-s3"   # S3 bucket for Grype HTML report
+    BUILD_BUCKET: "arjit-s3"                 # S3 bucket for your React build
+    CLOUDFRONT_ID: "E3PIQ3TRAQXUY0"          # CloudFront distribution ID
 
 phases:
   install:
@@ -10,60 +12,93 @@ phases:
       nodejs: 16
       python: 3.9
     commands:
-      - echo "🔧 Installing dependencies..."
+      - echo "=========================================="
+      - echo "🔧 INSTALL PHASE - Installing Dependencies"
+      - echo "=========================================="
       - npm install
       - echo "⬇️ Installing Grype vulnerability scanner..."
       - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
       - grype version
-      - echo "✅ Grype installed successfully."
+      - echo "✅ Grype installation completed."
 
   pre_build:
     commands:
       - echo "=========================================="
-      - echo "🔍 Step 1: Running vulnerability scan with Grype"
+      - echo "🔍 PRE_BUILD PHASE - Running Vulnerability Scan"
       - echo "=========================================="
 
-      # Run Grype and create JSON report
-      - grype dir:. --output json > grype-report.json || true
+      # Run Grype scan
+      - echo "Running Grype vulnerability scan..."
+      - grype dir:. --fail-on medium --output json > grype-report.json || true
+      - SCAN_EXIT_CODE=${PIPESTATUS[0]}
 
-      - echo "📁 Checking if JSON report exists..."
+      # Validate JSON report
+      - echo "📁 Checking for generated grype-report.json..."
       - >
         if [ ! -f "grype-report.json" ]; then
-          echo "❌ grype-report.json not found — scan failed!";
+          echo "❌ grype-report.json not found! Exiting...";
           exit 1;
-        else
-          echo "✅ grype-report.json generated successfully.";
         fi
+      - echo "✅ JSON report generated successfully."
 
+      # Convert JSON → HTML
       - echo "=========================================="
-      - echo "🧾 Step 2: Converting JSON report to HTML"
+      - echo "🧾 Converting JSON report to HTML..."
       - echo "=========================================="
-
       - >
         if [ ! -f "grype_to_html.py" ]; then
-          echo "❌ grype_to_html.py not found in the source directory!";
+          echo "❌ grype_to_html.py not found in source root!";
           exit 1;
         fi
-
       - python3 grype_to_html.py
+      - echo "✅ HTML report created successfully."
 
+      # Upload report to S3
       - echo "=========================================="
-      - echo "📤 Step 3: Uploading HTML report to S3 bucket"
+      - echo "📤 Uploading HTML report to S3 bucket"
       - echo "=========================================="
-
       - >
         if [ -f "grype-report.html" ]; then
+          aws s3 rm s3://$REPORT_BUCKET/grype-report.html || true;
           aws s3 cp grype-report.html s3://$REPORT_BUCKET/;
-          echo "✅ HTML report uploaded to s3://$REPORT_BUCKET/";
+          echo "✅ Report uploaded to s3://$REPORT_BUCKET/grype-report.html";
         else
           echo "❌ grype-report.html not found — skipping upload!";
           exit 1;
         fi
 
+      # Fail build if vulnerabilities found
+      - >
+        if [ $SCAN_EXIT_CODE -ne 0 ]; then
+          echo "❌ Vulnerabilities found (medium or higher)! Failing pipeline after report upload...";
+          exit 1;
+        else
+          echo "✅ No critical vulnerabilities detected. Proceeding to build...";
+        fi
+
   build:
     commands:
-      - echo "✅ Grype scan and HTML report generation completed successfully."
+      - echo "=========================================="
+      - echo "🏗️ BUILD PHASE - Building React Application"
+      - echo "=========================================="
+      - npm run build
+      - echo "✅ React build completed successfully."
+
+  post_build:
+    commands:
+      - echo "=========================================="
+      - echo "🚀 DEPLOY PHASE - Uploading Build to S3"
+      - echo "=========================================="
+      - aws s3 sync build/ s3://$BUILD_BUCKET --delete
+      - echo "✅ Build uploaded to s3://$BUILD_BUCKET"
+      - echo "=========================================="
+      - echo "🧹 Creating CloudFront Invalidation"
+      - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+      - echo "✅ CloudFront cache invalidated."
 
 artifacts:
   files:
+    - build/**/* 
     - grype-report.html
+  base-directory: build
+  discard-paths: no
