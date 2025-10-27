@@ -27,40 +27,37 @@ phases:
       - grype dir:. --output json > grype-report.json || true
 
       - echo "📁 Checking if JSON report exists..."
-      - |
+      - >
         if [ ! -f "grype-report.json" ]; then
-          echo "❌ grype-report.json not found — scan failed!"
-          exit 1
+          echo "❌ grype-report.json not found — scan failed!";
+          exit 1;
         else
-          echo "✅ grype-report.json generated successfully."
+          echo "✅ grype-report.json generated successfully.";
         fi
 
       - echo "=========================================="
       - echo "🧾 Step 2: Converting JSON report to HTML"
       - echo "=========================================="
 
-      # Ensure Python script exists before running
-      - |
+      - >
         if [ ! -f "grype_to_html.py" ]; then
-          echo "❌ grype_to_html.py not found in the source directory!"
-          exit 1
+          echo "❌ grype_to_html.py not found in the source directory!";
+          exit 1;
         fi
 
-      # Run Python script to generate HTML report
       - python3 grype_to_html.py
 
       - echo "=========================================="
       - echo "📤 Step 3: Uploading HTML report to S3 bucket"
       - echo "=========================================="
 
-      # Upload HTML report to S3 bucket
-      - |
+      - >
         if [ -f "grype-report.html" ]; then
-          aws s3 cp grype-report.html s3://$REPORT_BUCKET/
-          echo "✅ HTML report uploaded to s3://$REPORT_BUCKET/"
+          aws s3 cp grype-report.html s3://$REPORT_BUCKET/;
+          echo "✅ HTML report uploaded to s3://$REPORT_BUCKET/";
         else
-          echo "❌ grype-report.html not found — skipping upload!"
-          exit 1
+          echo "❌ grype-report.html not found — skipping upload!";
+          exit 1;
         fi
 
   build:
