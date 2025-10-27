@@ -2,8 +2,7 @@ version: 0.2
 
 env:
   variables:
-    REPORT_BUCKET: "arjit-grype-report-s3"     # S3 bucket for Grype HTML report
-    BUILD_BUCKET: "arjit-s3"                   # S3 bucket for application build
+    REPORT_BUCKET: "arjit-grype-report-s3"   # S3 bucket for HTML report
 
 phases:
   install:
@@ -15,46 +14,59 @@ phases:
       - npm install
       - echo "⬇️ Installing Grype vulnerability scanner..."
       - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+      - grype version
+      - echo "✅ Grype installed successfully."
 
   pre_build:
     commands:
-      - echo "🔍 Running Grype vulnerability scan..."
-      # Generate JSON report for HTML conversion
+      - echo "=========================================="
+      - echo "🔍 Step 1: Running vulnerability scan with Grype"
+      - echo "=========================================="
+
+      # Run Grype and create JSON report
       - grype dir:. --output json > grype-report.json || true
 
-      - echo "📊 Converting Grype JSON report to HTML..."
-      - python3 grype_to_html.py
-
-      - echo "📤 Uploading Grype HTML report to S3..."
-      - aws s3 rm s3://$REPORT_BUCKET/grype-report.html || true
-      - aws s3 cp grype-report.html s3://$REPORT_BUCKET/
-
-      # Fail the build if vulnerabilities of medium severity or higher are found
-      - echo "⚙️ Checking for medium or higher vulnerabilities..."
+      - echo "📁 Checking if JSON report exists..."
       - |
-        grype dir:. --fail-on medium --output table | tee grype-scan.log
-        SCAN_EXIT_CODE=${PIPESTATUS[0]}
-        if [ $SCAN_EXIT_CODE -ne 0 ]; then
-          echo "❌ Vulnerabilities found at or above medium severity. Failing pipeline..."
+        if [ ! -f "grype-report.json" ]; then
+          echo "❌ grype-report.json not found — scan failed!"
           exit 1
         else
-          echo "✅ No medium or higher vulnerabilities found."
+          echo "✅ grype-report.json generated successfully."
+        fi
+
+      - echo "=========================================="
+      - echo "🧾 Step 2: Converting JSON report to HTML"
+      - echo "=========================================="
+
+      # Ensure Python script exists before running
+      - |
+        if [ ! -f "grype_to_html.py" ]; then
+          echo "❌ grype_to_html.py not found in the source directory!"
+          exit 1
+        fi
+
+      # Run Python script to generate HTML report
+      - python3 grype_to_html.py
+
+      - echo "=========================================="
+      - echo "📤 Step 3: Uploading HTML report to S3 bucket"
+      - echo "=========================================="
+
+      # Upload HTML report to S3 bucket
+      - |
+        if [ -f "grype-report.html" ]; then
+          aws s3 cp grype-report.html s3://$REPORT_BUCKET/
+          echo "✅ HTML report uploaded to s3://$REPORT_BUCKET/"
+        else
+          echo "❌ grype-report.html not found — skipping upload!"
+          exit 1
         fi
 
   build:
     commands:
-      - echo "🚀 Building the project..."
-      - npm run build
-
-  post_build:
-    commands:
-      - echo "📦 Uploading build artifacts to S3..."
-      - aws s3 sync build/ s3://$BUILD_BUCKET --delete
-      - echo "🧹 Invalidating CloudFront cache..."
-      - aws cloudfront create-invalidation --distribution-id E3PIQ3TRAQXUY0 --paths "/*"
-      - echo "✅ Build and vulnerability scan completed successfully!"
+      - echo "✅ Grype scan and HTML report generation completed successfully."
 
 artifacts:
-  files: '**/*'
-  base-directory: build
-  discard-paths: yes
+  files:
+    - grype-report.html
