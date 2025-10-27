@@ -1,0 +1,109 @@
+import json
+import os
+from datetime import datetime
+
+# Detect CodeBuild working directory
+base_dir = os.getenv("CODEBUILD_SRC_DIR", os.getcwd())
+
+# File paths (relative to the repo root)
+input_file = os.path.join(base_dir, "grype-report.json")
+output_file = os.path.join(base_dir, "grype-report.html")
+
+print(f"📂 Base directory: {base_dir}")
+print(f"📄 Looking for JSON report at: {input_file}")
+
+# Check if JSON report exists
+if not os.path.exists(input_file):
+    print("❌ Error: grype-report.json not found. Skipping HTML conversion.")
+    exit(1)
+
+# Load JSON data
+try:
+    with open(input_file, "r") as f:
+        data = json.load(f)
+except json.JSONDecodeError as e:
+    print(f"❌ Failed to parse JSON file: {e}")
+    exit(1)
+
+# Start building HTML content
+html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Grype Vulnerability Report</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }}
+        h1 {{
+            color: #333;
+        }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+        }}
+        th {{
+            background-color: #f2f2f2;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f9f9f9;
+        }}
+        tr:hover {{
+            background-color: #e9e9e9;
+        }}
+        .critical {{ color: red; font-weight: bold; }}
+        .high {{ color: darkorange; font-weight: bold; }}
+        .medium {{ color: goldenrod; }}
+        .low {{ color: green; }}
+    </style>
+</head>
+<body>
+    <h1>Grype Vulnerability Report</h1>
+    <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    <table>
+        <tr>
+            <th>Package</th>
+            <th>Version</th>
+            <th>Vulnerability</th>
+            <th>Severity</th>
+            <th>Description</th>
+        </tr>
+"""
+
+# Add vulnerabilities to the HTML table
+matches = data.get("matches", [])
+if not matches:
+    html_content += "<tr><td colspan='5' style='text-align:center;'>✅ No vulnerabilities found.</td></tr>"
+
+for match in matches:
+    vuln = match.get("vulnerability", {})
+    artifact = match.get("artifact", {})
+    severity = vuln.get("severity", "Unknown").lower()
+    description = vuln.get("description", "N/A").replace("\n", " ")[:200]
+
+    html_content += f"""
+        <tr>
+            <td>{artifact.get('name', 'N/A')}</td>
+            <td>{artifact.get('version', 'N/A')}</td>
+            <td>{vuln.get('id', 'N/A')}</td>
+            <td class="{severity}">{vuln.get('severity', 'N/A')}</td>
+            <td>{description}...</td>
+        </tr>
+    """
+
+html_content += """
+    </table>
+</body>
+</html>
+"""
+
+# Write HTML output
+with open(output_file, "w") as f:
+    f.write(html_content)
+
+print(f"✅ HTML report generated successfully: {output_file}")
