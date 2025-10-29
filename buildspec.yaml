@@ -116,8 +116,6 @@ phases:
       - curl -LO https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
       - unzip codeql-linux64.zip
       - export PATH=$PATH:$(pwd)/codeql
-      - echo "🧰 Installing sarif-to-html converter..."
-      - npm install -g sarif-to-html
 
   pre_build:
     commands:
@@ -127,32 +125,36 @@ phases:
     commands:
       - echo "🏗️ Building React application..."
       - npm run build
+
       - echo "🔍 Running CodeQL static analysis..."
-      # Create CodeQL database for JavaScript (React)
       - ./codeql/codeql database create codeql-db --language=javascript --source-root=.
-      # Analyze using built-in JavaScript queries, output SARIF file
       - ./codeql/codeql database analyze codeql-db ./codeql/javascript/ql/src/codeql-suites/javascript-code-scanning.qls \
-          --format=sarifv2.1.0 --output=codeql-results.sarif
-      # Convert SARIF JSON to readable HTML report
-      - echo "🧾 Generating HTML report..."
-      - sarif-to-html -t compact -o codeql-report.html codeql-results.sarif
+          --format=csv --output=codeql-results.csv
+
+      - echo "🧾 Generating simple HTML report..."
+      - echo "<html><head><title>CodeQL Scan Report</title></head><body><h2>CodeQL Scan Results</h2><pre>" > codeql-report.html
+      - cat codeql-results.csv >> codeql-report.html
+      - echo "</pre></body></html>" >> codeql-report.html
 
   post_build:
     commands:
       - echo "☁️ Uploading React build to S3 (Build Bucket)..."
       - aws s3 sync build/ s3://arjit-build-s3 --delete
 
-      - echo "📤 Uploading CodeQL HTML report to S3 (Report Bucket)..."
+      - echo "📤 Uploading CodeQL HTML & CSV reports to S3 (Report Bucket)..."
       - aws s3 cp codeql-report.html s3://arjit-codeql-s3/codeql-report.html
-      - aws s3 cp codeql-results.sarif s3://arjit-codeql-s3/codeql-results.sarif
+      - aws s3 cp codeql-results.csv s3://arjit-codeql-s3/codeql-results.csv
 
       - echo "🌐 Creating CloudFront invalidation..."
       - aws cloudfront create-invalidation --distribution-id E3PIQ3TRAQXUY0 --paths "/*"
-      
+
       - echo "✅ Build, Scan, and Deployment Completed Successfully!"
 
 artifacts:
   files: '**/*'
   base-directory: build
   discard-paths: yes
+
+
+
 
