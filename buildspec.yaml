@@ -1,97 +1,158 @@
-version: 0.2
+# version: 0.2
 
-env:
-  shell: bash
-  variables:
-    REPORT_BUCKET: "arjit-grype-report-s3"   # S3 bucket for Grype HTML report
-    BUILD_BUCKET: "arjit-s3"                 # S3 bucket for build output
-    CLOUDFRONT_ID: "E3PIQ3TRAQXUY0"          # CloudFront distribution ID
+# env:
+#   shell: bash
+#   variables:
+#     REPORT_BUCKET: "arjit-grype-report-s3"   # S3 bucket for Grype HTML report
+#     BUILD_BUCKET: "arjit-s3"                 # S3 bucket for build output
+#     CLOUDFRONT_ID: "E3PIQ3TRAQXUY0"          # CloudFront distribution ID
+
+# phases:
+#   install:
+#     runtime-versions:
+#       nodejs: 16
+#       python: 3.9
+#     commands:
+#       - echo "=========================================="
+#       - echo "🔧 INSTALL PHASE - Installing dependencies"
+#       - echo "=========================================="
+#       - npm install
+#       - echo "⬇️ Installing Grype vulnerability scanner..."
+#       - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+#       - grype version
+#       - echo "✅ Grype installation completed."
+
+#   pre_build:
+#     commands:
+#       - echo "=========================================="
+#       - echo "🔍 PRE_BUILD PHASE - Running vulnerability scan"
+#       - echo "=========================================="
+
+#       # Run Grype scan (fail on medium or higher vulnerabilities)
+#       - |
+#         set +e
+#         grype dir:. --fail-on medium --output json > grype-report.json
+#         SCAN_EXIT_CODE=$?
+#         set -e
+#         echo "Grype scan exit code: $SCAN_EXIT_CODE"
+
+#       # Validate JSON report
+#       - |
+#         if [ ! -f "grype-report.json" ]; then
+#           echo "❌ grype-report.json not found! Exiting..."
+#           exit 1
+#         fi
+#         echo "✅ JSON report generated successfully."
+
+#       # Convert JSON report to HTML using Python
+#       - echo "📊 Converting JSON report to HTML..."
+#       - python3 grype_to_html.py
+#       - echo "✅ HTML report generated successfully."
+
+#       # Upload HTML report to S3
+#       - echo "📤 Uploading HTML report to S3 bucket..."
+#       - |
+#         if [ -f "grype-report.html" ]; then
+#           aws s3 rm s3://$REPORT_BUCKET/grype-report.html || true
+#           aws s3 cp grype-report.html s3://$REPORT_BUCKET/
+#           echo "✅ Report uploaded to s3://$REPORT_BUCKET/grype-report.html"
+#         else
+#           echo "❌ HTML report missing — skipping upload!"
+#           exit 1
+#         fi
+
+#       # Fail the pipeline if vulnerabilities were found
+#       - |
+#         if [ $SCAN_EXIT_CODE -ne 0 ]; then
+#           echo "❌ Vulnerabilities found (medium or higher)! Stopping pipeline."
+#           exit 1
+#         else
+#           echo "✅ No medium or higher vulnerabilities found. Proceeding to build..."
+#         fi
+
+#   build:
+#     commands:
+#       - echo "=========================================="
+#       - echo "🏗️ BUILD PHASE - Building React app"
+#       - echo "=========================================="
+#       - npm run build
+#       - echo "✅ Build completed successfully."
+
+#   post_build:
+#     commands:
+#       - echo "=========================================="
+#       - echo "🚀 DEPLOY PHASE - Uploading build to S3"
+#       - echo "=========================================="
+#       - aws s3 sync build/ s3://$BUILD_BUCKET --delete
+#       - echo "✅ Build uploaded to s3://$BUILD_BUCKET"
+#       - echo "🧹 Invalidating CloudFront cache..."
+#       - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+#       - echo "✅ CloudFront invalidation completed."
+
+# artifacts:
+#   files:
+#     - '**/*'
+#     - grype-report.html
+#   base-directory: build
+#   discard-paths: no
+
+
+
+
+
+
+###codeql
+
+version: 0.2
 
 phases:
   install:
     runtime-versions:
       nodejs: 16
-      python: 3.9
     commands:
-      - echo "=========================================="
-      - echo "🔧 INSTALL PHASE - Installing dependencies"
-      - echo "=========================================="
-      - npm install
-      - echo "⬇️ Installing Grype vulnerability scanner..."
-      - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
-      - grype version
-      - echo "✅ Grype installation completed."
+      - echo "🔧 Installing React dependencies..."
+      - npm ci
+      - echo "📦 Installing CodeQL CLI..."
+      - curl -LO https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
+      - unzip codeql-linux64.zip
+      - export PATH=$PATH:$(pwd)/codeql
+      - echo "🧰 Installing sarif-to-html converter..."
+      - npm install -g sarif-to-html
 
   pre_build:
     commands:
-      - echo "=========================================="
-      - echo "🔍 PRE_BUILD PHASE - Running vulnerability scan"
-      - echo "=========================================="
-
-      # Run Grype scan (fail on medium or higher vulnerabilities)
-      - |
-        set +e
-        grype dir:. --fail-on medium --output json > grype-report.json
-        SCAN_EXIT_CODE=$?
-        set -e
-        echo "Grype scan exit code: $SCAN_EXIT_CODE"
-
-      # Validate JSON report
-      - |
-        if [ ! -f "grype-report.json" ]; then
-          echo "❌ grype-report.json not found! Exiting..."
-          exit 1
-        fi
-        echo "✅ JSON report generated successfully."
-
-      # Convert JSON report to HTML using Python
-      - echo "📊 Converting JSON report to HTML..."
-      - python3 grype_to_html.py
-      - echo "✅ HTML report generated successfully."
-
-      # Upload HTML report to S3
-      - echo "📤 Uploading HTML report to S3 bucket..."
-      - |
-        if [ -f "grype-report.html" ]; then
-          aws s3 rm s3://$REPORT_BUCKET/grype-report.html || true
-          aws s3 cp grype-report.html s3://$REPORT_BUCKET/
-          echo "✅ Report uploaded to s3://$REPORT_BUCKET/grype-report.html"
-        else
-          echo "❌ HTML report missing — skipping upload!"
-          exit 1
-        fi
-
-      # Fail the pipeline if vulnerabilities were found
-      - |
-        if [ $SCAN_EXIT_CODE -ne 0 ]; then
-          echo "❌ Vulnerabilities found (medium or higher)! Stopping pipeline."
-          exit 1
-        else
-          echo "✅ No medium or higher vulnerabilities found. Proceeding to build..."
-        fi
+      - echo "🚀 Preparing for React build and CodeQL scan..."
 
   build:
     commands:
-      - echo "=========================================="
-      - echo "🏗️ BUILD PHASE - Building React app"
-      - echo "=========================================="
+      - echo "🏗️ Building React application..."
       - npm run build
-      - echo "✅ Build completed successfully."
+      - echo "🔍 Running CodeQL static analysis..."
+      # Create CodeQL database for JavaScript (React)
+      - ./codeql/codeql database create codeql-db --language=javascript --source-root=.
+      # Analyze using built-in JavaScript queries, output SARIF file
+      - ./codeql/codeql database analyze codeql-db ./codeql/javascript/ql/src/codeql-suites/javascript-code-scanning.qls \
+          --format=sarifv2.1.0 --output=codeql-results.sarif
+      # Convert SARIF JSON to readable HTML report
+      - echo "🧾 Generating HTML report..."
+      - sarif-to-html -t compact -o codeql-report.html codeql-results.sarif
 
   post_build:
     commands:
-      - echo "=========================================="
-      - echo "🚀 DEPLOY PHASE - Uploading build to S3"
-      - echo "=========================================="
-      - aws s3 sync build/ s3://$BUILD_BUCKET --delete
-      - echo "✅ Build uploaded to s3://$BUILD_BUCKET"
-      - echo "🧹 Invalidating CloudFront cache..."
-      - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
-      - echo "✅ CloudFront invalidation completed."
+      - echo "☁️ Uploading React build to S3 (Build Bucket)..."
+      - aws s3 sync build/ s3://arjit-build-s3 --delete
+
+      - echo "📤 Uploading CodeQL HTML report to S3 (Report Bucket)..."
+      - aws s3 cp codeql-report.html s3://arjit-codeql-s3/codeql-report.html
+      - aws s3 cp codeql-results.sarif s3://arjit-codeql-s3/codeql-results.sarif
+
+      - echo "🌐 Creating CloudFront invalidation..."
+      - aws cloudfront create-invalidation --distribution-id E3PIQ3TRAQXUY0 --paths "/*"
+      
+      - echo "✅ Build, Scan, and Deployment Completed Successfully!"
 
 artifacts:
-  files:
-    - '**/*'
-    - grype-report.html
+  files: '**/*'
   base-directory: build
-  discard-paths: no
+  discard-paths: yes
+
