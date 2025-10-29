@@ -110,8 +110,8 @@ phases:
     runtime-versions:
       nodejs: 16
     commands:
-      - echo "🔧 Installing React dependencies..."
-      - npm ci
+      - echo "🚀 Installing dependencies..."
+      - npm install
       - echo "📦 Installing CodeQL CLI..."
       - curl -LO https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
       - unzip codeql-linux64.zip
@@ -119,41 +119,40 @@ phases:
 
   pre_build:
     commands:
-      - echo "🚀 Preparing for React build and CodeQL scan..."
+      - echo "🧰 Preparing for React build..."
 
   build:
     commands:
-      - echo "🏗️ Building React application..."
+      - echo "🏗️ Building React app..."
       - npm run build
 
-      - echo "🔍 Running CodeQL static analysis..."
+      - echo "🔍 Running CodeQL analysis..."
+      # Create CodeQL database for JavaScript/React
       - ./codeql/codeql database create codeql-db --language=javascript --source-root=.
-      - ./codeql/codeql database analyze codeql-db ./codeql/javascript/ql/src/codeql-suites/javascript-code-scanning.qls \
-          --format=csv --output=codeql-results.csv
+      # Analyze the database using JavaScript CodeQL suite (no '\' continuation!)
+      - ./codeql/codeql database analyze codeql-db ./codeql/javascript/ql/src/codeql-suites/javascript-code-scanning.qls --format=csv --output=codeql-results.csv
 
-      - echo "🧾 Generating simple HTML report..."
-      - echo "<html><head><title>CodeQL Scan Report</title></head><body><h2>CodeQL Scan Results</h2><pre>" > codeql-report.html
+      # Generate simple HTML report from CSV
+      - echo "<html><body><h2>CodeQL Scan Report</h2><pre>" > codeql-report.html
       - cat codeql-results.csv >> codeql-report.html
       - echo "</pre></body></html>" >> codeql-report.html
 
   post_build:
     commands:
       - echo "☁️ Uploading React build to S3 (Build Bucket)..."
-      - aws s3 sync build/ s3://arjit-build-s3 --delete
+      - aws s3 sync build/ s3://arjit-build-s3
 
-      - echo "📤 Uploading CodeQL HTML & CSV reports to S3 (Report Bucket)..."
+      - echo "☁️ Uploading CodeQL report to S3 (Report Bucket)..."
       - aws s3 cp codeql-report.html s3://arjit-codeql-s3/codeql-report.html
-      - aws s3 cp codeql-results.csv s3://arjit-codeql-s3/codeql-results.csv
 
-      - echo "🌐 Creating CloudFront invalidation..."
+      - echo "🚀 Invalidating CloudFront cache..."
       - aws cloudfront create-invalidation --distribution-id E3PIQ3TRAQXUY0 --paths "/*"
-
-      - echo "✅ Build, Scan, and Deployment Completed Successfully!"
 
 artifacts:
   files: '**/*'
   base-directory: build
   discard-paths: yes
+
 
 
 
