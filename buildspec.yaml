@@ -120,7 +120,7 @@ phases:
       - export PATH=$PATH:$(pwd)/codeql
 
       - echo "📚 Cloning CodeQL JavaScript queries..."
-      - git clone https://github.com/github/codeql.git
+      - git clone https://github.com/github/codeql.git codeql-repo
 
   pre_build:
     commands:
@@ -135,20 +135,20 @@ phases:
       - ./codeql/codeql database create codeql-db --language=javascript --source-root=.
 
       - echo "⚙️ Running CodeQL analysis..."
-      - ./codeql/codeql database analyze codeql-db codeql/javascript/ql/src/codeql-suites/javascript-code-scanning.qls \
+      - ./codeql/codeql database analyze codeql-db codeql-repo/javascript/ql/src/codeql-suites/javascript-code-scanning.qls \
           --format=sarifv2.1.0 --output=codeql-results.sarif
 
-      - echo "🧾 Converting SARIF report to readable HTML..."
-      - echo "<html><body><h2>CodeQL Scan Report (SARIF format)</h2><pre>" > codeql-report.html
+      - echo "🧾 Creating simple HTML report..."
+      - echo "<html><body><h2>CodeQL Scan Report</h2><pre>" > codeql-report.html
       - cat codeql-results.sarif >> codeql-report.html
       - echo "</pre></body></html>" >> codeql-report.html
 
   post_build:
     commands:
-      - echo "☁️ Uploading React build to S3 (Build Bucket)..."
+      - echo "☁️ Uploading React build to S3..."
       - aws s3 sync build/ s3://arjit-build-s3
 
-      - echo "☁️ Uploading CodeQL HTML report to S3 (CodeQL Bucket)..."
+      - echo "☁️ Uploading CodeQL report to S3..."
       - aws s3 cp codeql-report.html s3://arjit-codeql-s3/codeql-report.html
 
       - echo "🚀 Invalidating CloudFront cache..."
@@ -158,6 +158,8 @@ artifacts:
   files: '**/*'
   base-directory: build
   discard-paths: yes
+
+
 
 
 
