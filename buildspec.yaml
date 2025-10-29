@@ -103,7 +103,6 @@
 
 ###codeql
 
-
 version: 0.2
 
 phases:
@@ -135,8 +134,8 @@ phases:
       - ./codeql/codeql database create codeql-db --language=javascript --source-root=.
 
       - echo "⚙️ Running CodeQL analysis..."
-      - ./codeql/codeql database analyze codeql-db codeql-repo/javascript/ql/src/codeql-suites/javascript-code-scanning.qls \
-          --format=sarifv2.1.0 --output=codeql-results.sarif
+      # ✅ FIXED — removed the backslash, single clean line
+      - ./codeql/codeql database analyze codeql-db codeql-repo/javascript/ql/src/codeql-suites/javascript-code-scanning.qls --format=sarifv2.1.0 --output=codeql-results.sarif
 
       - echo "🧾 Creating simple HTML report..."
       - echo "<html><body><h2>CodeQL Scan Report</h2><pre>" > codeql-report.html
@@ -158,8 +157,6 @@ artifacts:
   files: '**/*'
   base-directory: build
   discard-paths: yes
-
-
 
 
 
